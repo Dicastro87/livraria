@@ -1,0 +1,114 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
+from PIL import Image, ImageTk
+import sqlite3
+import datetime
+
+# Configuração do banco de dados SQLite
+def setup_database():
+    conn = sqlite3.connect('books.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY,
+            photo BLOB,
+            code TEXT,
+            purchase_date TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Adicionar livro ao banco de dados
+def add_book(photo_path, code, purchase_date):
+    conn = sqlite3.connect('books.db')
+    cursor = conn.cursor()
+    with open(photo_path, 'rb') as file:
+        photo = file.read()
+    cursor.execute('''
+        INSERT INTO books (photo, code, purchase_date)
+        VALUES (?, ?, ?)
+    ''', (photo, code, purchase_date))
+    conn.commit()
+    conn.close()
+    messagebox.showinfo("Success", "Book added successfully")
+
+# Carregar foto do livro
+def load_image():
+    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.png")])
+    if file_path:
+        img = Image.open(file_path)
+        img.thumbnail((100, 100))
+        img = ImageTk.PhotoImage(img)
+        photo_label.config(image=img)
+        photo_label.image = img
+        global current_photo_path
+        current_photo_path = file_path
+
+# Salvar livro com dados fornecidos
+def save_book():
+    code = code_entry.get()
+    purchase_date = purchase_date_entry.get()
+    if not current_photo_path:
+        messagebox.showwarning("Warning", "Please load a photo")
+        return
+    if not code or not purchase_date:
+        messagebox.showwarning("Warning", "Please fill in all fields")
+        return
+    add_book(current_photo_path, code, purchase_date)
+
+# Exibir lista de livros
+def show_books():
+    conn = sqlite3.connect('books.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM books')
+    books = cursor.fetchall()
+    conn.close()
+
+    for row in books_tree.get_children():
+        books_tree.delete(row)
+
+    for book in books:
+        photo = Image.open(io.BytesIO(book[1]))
+        photo.thumbnail((100, 100))
+        photo = ImageTk.PhotoImage(photo)
+        books_tree.insert('', 'end', values=(book[2], book[3]), image=photo)
+        books_tree.image = photo
+
+# Configuração da interface gráfica
+setup_database()
+app = tk.Tk()
+app.title("BookTracker")
+
+frame = tk.Frame(app)
+frame.pack(padx=10, pady=10)
+
+photo_label = tk.Label(frame)
+photo_label.grid(row=0, column=0, columnspan=2)
+
+load_photo_button = tk.Button(frame, text="Load Photo", command=load_image)
+load_photo_button.grid(row=1, column=0, columnspan=2)
+
+tk.Label(frame, text="Code:").grid(row=2, column=0, sticky=tk.E)
+code_entry = tk.Entry(frame)
+code_entry.grid(row=2, column=1)
+
+tk.Label(frame, text="Purchase Date (YYYY-MM-DD):").grid(row=3, column=0, sticky=tk.E)
+purchase_date_entry = tk.Entry(frame)
+purchase_date_entry.grid(row=3, column=1)
+
+save_button = tk.Button(frame, text="Save Book", command=save_book)
+save_button.grid(row=4, column=0, columnspan=2)
+
+show_books_button = tk.Button(frame, text="Show Books", command=show_books)
+show_books_button.grid(row=5, column=0, columnspan=2)
+
+# Configuração da árvore para exibir livros
+books_tree = ttk.Treeview(app, columns=("Code", "Purchase Date"), show='headings')
+books_tree.heading("Code", text="Code")
+books_tree.heading("Purchase Date", text="Purchase Date")
+books_tree.pack(padx=10, pady=10)
+
+current_photo_path = None
+app.mainloop()
